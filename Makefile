@@ -7,11 +7,11 @@ help:
 	@echo "Browser Challenge Agent"
 	@echo "======================="
 	@echo ""
-	@echo "  make setup       - Install dependencies (first time)"
-	@echo "  make run         - Run the agent (set GEMINI_API_KEY first)"
-	@echo "  make run-verbose - Run with detailed action output"
-	@echo "  make peek        - Preview the challenge site"
-	@echo "  make clean       - Remove venv and artifacts"
+	@echo "  make setup     - Install dependencies (first time)"
+	@echo "  make run       - Run the agent (verbose, shows actions)"
+	@echo "  make run-quiet - Run with minimal output"
+	@echo "  make peek      - Preview the challenge site"
+	@echo "  make clean     - Remove venv and artifacts"
 	@echo ""
 	@echo "Quick start:"
 	@echo "  export GEMINI_API_KEY='your-key'"
@@ -31,22 +31,22 @@ setup:
 	@echo ""
 	@echo "Next: export GEMINI_API_KEY='your-key' && make run"
 
-# Run the agent
+# Run the agent (verbose by default)
 run:
 	@if [ -z "$(GEMINI_API_KEY)" ]; then \
 		echo "❌ GEMINI_API_KEY not set"; \
 		echo "Run: export GEMINI_API_KEY='your-key'"; \
 		exit 1; \
 	fi
-	@./venv/bin/python agent.py
+	@./venv/bin/python agent.py --verbose
 
-# Run with verbose output (shows each action)
-run-verbose:
+# Run with minimal output (no action details)
+run-quiet:
 	@if [ -z "$(GEMINI_API_KEY)" ]; then \
 		echo "❌ GEMINI_API_KEY not set"; \
 		exit 1; \
 	fi
-	@./venv/bin/python agent.py --verbose
+	@./venv/bin/python agent.py
 
 # Preview the challenge site
 peek:
