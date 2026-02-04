@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+screenshots/
+*.png
+run_results.json
+.env
