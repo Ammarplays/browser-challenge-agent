@@ -8,6 +8,7 @@ import asyncio
 import base64
 import json
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -138,7 +139,7 @@ async def analyze_screenshot(model, screenshot_bytes: bytes, challenge_num: int)
         return {"action": "wait", "value": "500", "thinking": f"Error: {e}"}
 
 # ============ BROWSER ACTIONS ============
-async def execute_action(page: Page, action: dict) -> bool:
+async def execute_action(page: Page, action: dict, verbose: bool = False) -> bool:
     """Execute the action from Gemini"""
     global stats
     stats.actions_taken += 1
@@ -147,7 +148,8 @@ async def execute_action(page: Page, action: dict) -> bool:
     target = action.get("target", "")
     value = action.get("value", "")
     
-    print(f"  → {action_type}: {target} {value}")
+    if verbose:
+        print(f"  → {action_type}: {target} {value}")
     
     try:
         if action_type == "click":
@@ -191,7 +193,8 @@ async def execute_action(page: Page, action: dict) -> bool:
         
     except Exception as e:
         stats.errors.append(f"Action error ({action_type}): {str(e)}")
-        print(f"  ⚠ Action failed: {e}")
+        if verbose:
+            print(f"  ⚠ Action failed: {e}")
         await asyncio.sleep(0.3)
         return False
 
@@ -216,11 +219,9 @@ async def detect_challenge_change(page: Page, prev_url: str, prev_content: str) 
         return False
 
 # ============ MAIN SOLVER ============
-async def solve_challenge(page: Page, model, challenge_num: int) -> bool:
-    """Solve a single challenge"""
-    print(f"\n{'='*50}")
-    print(f"🎯 Challenge #{challenge_num}")
-    print(f"{'='*50}")
+async def solve_challenge(page: Page, model, challenge_num: int, verbose: bool = False) -> tuple[bool, float]:
+    """Solve a single challenge. Returns (success, time_taken)"""
+    challenge_start = time.time()
     
     prev_url = page.url
     prev_content = ""
@@ -231,21 +232,20 @@ async def solve_challenge(page: Page, model, challenge_num: int) -> bool:
         
         # Get action from Gemini
         action = await analyze_screenshot(model, screenshot, challenge_num)
-        print(f"  💭 {action.get('thinking', 'No analysis')[:80]}")
+        if verbose:
+            print(f"  💭 {action.get('thinking', 'No analysis')[:80]}")
         
         # Execute action
-        is_done = await execute_action(page, action)
+        is_done = await execute_action(page, action, verbose)
         
         if is_done or action.get("action") == "done":
-            print(f"  ✅ Challenge #{challenge_num} marked complete")
             stats.challenges_solved += 1
-            return True
+            return True, time.time() - challenge_start
         
         # Check if challenge changed
         if await detect_challenge_change(page, prev_url, prev_content):
-            print(f"  ✅ Challenge #{challenge_num} complete (page changed)")
             stats.challenges_solved += 1
-            return True
+            return True, time.time() - challenge_start
         
         # Update tracking
         try:
@@ -258,25 +258,22 @@ async def solve_challenge(page: Page, model, challenge_num: int) -> bool:
         
         # Timeout check
         if time.time() - stats.start_time > 290:  # 4:50 - leave buffer
-            print("  ⚠ Approaching time limit!")
             break
     
-    print(f"  ❌ Challenge #{challenge_num} failed (max attempts)")
     stats.challenges_failed += 1
-    return False
+    return False, time.time() - challenge_start
 
-async def run_agent():
+async def run_agent(verbose: bool = False):
     """Main agent loop"""
     global stats
     
     print("🤖 Browser Challenge Agent")
     print(f"📍 Target: {CHALLENGE_URL}")
     print(f"🧠 Model: {GEMINI_MODEL}")
-    print("="*50)
+    print()
     
     # Setup Gemini
     model = setup_gemini()
-    print("✅ Gemini initialized")
     
     stats.start_time = time.time()
     
@@ -285,20 +282,25 @@ async def run_agent():
         context = await browser.new_context(viewport={"width": 1280, "height": 720})
         page = await context.new_page()
         
-        print(f"✅ Browser launched")
-        
         # Navigate to challenge
         await page.goto(CHALLENGE_URL, wait_until="networkidle")
-        print(f"✅ Loaded challenge page")
         await asyncio.sleep(1)
         
-        # Solve challenges
+        # Solve challenges with live progress
+        total_time = 0.0
+        
         for i in range(1, 31):
             if time.time() - stats.start_time > 290:
-                print("\n⏰ Time limit approaching, stopping...")
+                print(f"\n⏰ Time limit approaching, stopping...")
                 break
-                
-            success = await solve_challenge(page, model, i)
+            
+            success, challenge_time = await solve_challenge(page, model, i, verbose)
+            total_time += challenge_time
+            
+            # Print progress line like: [ 1/30] ✓ 1.7s | Total: 1.7s
+            status = "✓" if success else "✗"
+            color_status = f"\033[92m{status}\033[0m" if success else f"\033[91m{status}\033[0m"
+            print(f"[{i:2d}/30] {color_status} {challenge_time:.1f}s | Total: {total_time:.1f}s")
             
             if not success:
                 # Try to find and click "next" or "skip" button
@@ -314,19 +316,24 @@ async def run_agent():
     
     stats.end_time = time.time()
     
-    # Print results
-    print("\n" + "="*50)
-    print("📊 RESULTS")
-    print("="*50)
-    results = stats.to_dict()
-    print(json.dumps(results, indent=2))
+    # Print final summary
+    print()
+    print(f"🏁 Finished in {stats.duration_seconds:.2f}s")
+    print(f"✅ Solved: {stats.challenges_solved}/30")
+    if stats.challenges_failed > 0:
+        print(f"❌ Failed: {stats.challenges_failed}")
+    print(f"💰 Est. cost: ${stats.cost_estimate:.4f}")
     
     # Save results
+    results = stats.to_dict()
     results_path = Path("run_results.json")
     results_path.write_text(json.dumps(results, indent=2))
-    print(f"\n💾 Results saved to {results_path}")
+    
+    if verbose:
+        print(f"\n💾 Results saved to {results_path}")
     
     return results
 
 if __name__ == "__main__":
-    asyncio.run(run_agent())
+    verbose = "-v" in sys.argv or "--verbose" in sys.argv
+    asyncio.run(run_agent(verbose=verbose))

@@ -1,16 +1,17 @@
 # Browser Challenge Agent
 # Solves 30 browser challenges in <5 minutes using Gemini 3 Flash + Playwright
 
-.PHONY: setup run peek clean help
+.PHONY: setup run run-verbose peek clean help
 
 help:
 	@echo "Browser Challenge Agent"
 	@echo "======================="
 	@echo ""
-	@echo "  make setup    - Install dependencies (first time)"
-	@echo "  make run      - Run the agent (set GEMINI_API_KEY first)"
-	@echo "  make peek     - Preview the challenge site"
-	@echo "  make clean    - Remove venv and artifacts"
+	@echo "  make setup       - Install dependencies (first time)"
+	@echo "  make run         - Run the agent (set GEMINI_API_KEY first)"
+	@echo "  make run-verbose - Run with detailed action output"
+	@echo "  make peek        - Preview the challenge site"
+	@echo "  make clean       - Remove venv and artifacts"
 	@echo ""
 	@echo "Quick start:"
 	@echo "  export GEMINI_API_KEY='your-key'"
@@ -37,8 +38,15 @@ run:
 		echo "Run: export GEMINI_API_KEY='your-key'"; \
 		exit 1; \
 	fi
-	@echo "🚀 Starting agent..."
 	@./venv/bin/python agent.py
+
+# Run with verbose output (shows each action)
+run-verbose:
+	@if [ -z "$(GEMINI_API_KEY)" ]; then \
+		echo "❌ GEMINI_API_KEY not set"; \
+		exit 1; \
+	fi
+	@./venv/bin/python agent.py --verbose
 
 # Preview the challenge site
 peek:
