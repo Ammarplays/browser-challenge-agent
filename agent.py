@@ -42,10 +42,11 @@ class Stats:
     
     @property
     def cost_estimate(self) -> float:
-        # Gemini Flash pricing (approximate)
-        # Input: $0.075 / 1M tokens, Output: $0.30 / 1M tokens
-        input_cost = (self.input_tokens / 1_000_000) * 0.075
-        output_cost = (self.output_tokens / 1_000_000) * 0.30
+        # Gemini 3 Flash Preview pricing (as of Feb 2026)
+        # Input: $0.50 / 1M tokens, Output: $3.00 / 1M tokens
+        # Source: https://cloud.google.com/vertex-ai/generative-ai/pricing
+        input_cost = (self.input_tokens / 1_000_000) * 0.50
+        output_cost = (self.output_tokens / 1_000_000) * 3.00
         return input_cost + output_cost
     
     def to_dict(self) -> dict:
